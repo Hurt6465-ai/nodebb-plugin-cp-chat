@@ -19,6 +19,7 @@
   if (cpPluginConfig().enabled === false) return;
 
   if (window.__cpNodebbHarmonyInited) return;
+  window.__cpNodebbHarmonyVersion = "1.0.1-peer-fix";
   window.__cpNodebbHarmonyInited = true;
 
   var LS_PREFIX = "cp_chat_harmony_" + location.pathname.replace(/[^\w]/g, "_");
@@ -117,7 +118,7 @@
     '1. 做情感分析。50字以内，格式严格写为："[情绪状态]，[表面意思]，[可能潜台词]。" 若消息太短无法判断，写"消息很短，正常接即可。"\n' +
     '2. 生成3-5条短回复。每条必须能直接发送，10字以内，口语化，有接话钩子。\n\n' +
     '【回复生成规则】\n' +
-    '- 每条 text 必须 ≤10 个中文字符，越短越好。\n' +
+    '- 每条 text 必须 ≤12 个中文字符，越短越好。\n' +
     '- 可以用"哈哈哈、真的、笑死、好家伙、绝了、天呐"等自然聊天词。\n' +
     '- 风格多样，至少覆盖轻松幽默/温暖关心/真诚走心/推进关系/化解尴尬中的不同方向。\n' +
     '- 每条附带口语化风险说明，例如"很安全，她会回"或"有点冒险"。\n' +
@@ -726,22 +727,141 @@
     return allMsgs;
   }
 
+  function getRelativePath() {
+    return (window.config && window.config.relative_path) || "";
+  }
+
+  function getRoutePeerSlug() {
+    var path = String(location.pathname || "");
+    var rel = getRelativePath();
+
+    if (rel && path.indexOf(rel) === 0) {
+      path = path.slice(rel.length) || "/";
+    }
+
+    var match = path.match(/\/user\/([^\/?#]+)(?:\/chats(?:\/|$)|$)/i);
+    if (!match) return "";
+
+    try {
+      return decodeURIComponent(match[1]);
+    } catch (_) {
+      return match[1] || "";
+    }
+  }
+
+  function pickUserRecord(obj) {
+    if (!obj || typeof obj !== "object") return null;
+
+    if (obj.user && typeof obj.user === "object") return obj.user;
+    if (obj.targetUser && typeof obj.targetUser === "object") return obj.targetUser;
+    if (obj.recipient && typeof obj.recipient === "object") return obj.recipient;
+    if (obj.toUser && typeof obj.toUser === "object") return obj.toUser;
+    if (obj.profile && typeof obj.profile === "object") return obj.profile;
+    if (obj.uid || obj.username || obj.userslug || obj.slug) return obj;
+
+    return null;
+  }
+
+  function setPeerFromUser(u) {
+    if (!u || typeof u !== "object") return false;
+
+    var myUidStr = String(window.app && app.user ? app.user.uid : state.myUid);
+    var uid = u.uid || u.userId || u.id;
+    var username = u.username || u.displayname || u.name || u.userslug || u.slug || "";
+    var userslug = u.userslug || u.slug || (username ? encodeURIComponent(String(username).toLowerCase().replace(/ /g, "-")) : "");
+
+    if (uid && String(uid) !== myUidStr && String(uid) !== "0") state.peerUidCache = String(uid);
+    if (username) state.peerUsernameCache = String(username);
+    if (userslug) state.peerUserslugCache = String(userslug);
+    if (u.picture) state.peerPictureCache = u.picture;
+    if (u.icontext) state.peerIconTextCache = u.icontext;
+    if (u.iconbgColor) state.peerIconBgCache = u.iconbgColor;
+
+    return !!(state.peerUidCache || state.peerUsernameCache || state.peerUserslugCache);
+  }
+
+  function getPeerFromAjaxify() {
+    var data = window.ajaxify && ajaxify.data ? ajaxify.data : null;
+    if (!data) return null;
+
+    var myUidStr = String(window.app && app.user ? app.user.uid : state.myUid);
+    var routeSlug = getRoutePeerSlug();
+    var candidates = [];
+
+    if (Array.isArray(data.users)) candidates = candidates.concat(data.users);
+    if (Array.isArray(data.members)) candidates = candidates.concat(data.members);
+    if (Array.isArray(data.recipients)) candidates = candidates.concat(data.recipients);
+
+    [data.user, data.targetUser, data.recipient, data.toUser, data.profile].forEach(function (x) {
+      var picked = pickUserRecord(x);
+      if (picked) candidates.push(picked);
+    });
+
+    for (var i = 0; i < candidates.length; i++) {
+      var u = candidates[i];
+      if (!u || typeof u !== "object") continue;
+      var uid = u.uid || u.userId || u.id;
+      var slug = u.userslug || u.slug || u.username || "";
+      if (uid && String(uid) === myUidStr) continue;
+      if (routeSlug && slug && String(slug).toLowerCase() !== String(routeSlug).toLowerCase() && String(u.username || "").toLowerCase() !== String(routeSlug).toLowerCase()) {
+        continue;
+      }
+      return u;
+    }
+
+    for (var j = 0; j < candidates.length; j++) {
+      var cu = candidates[j];
+      if (!cu || typeof cu !== "object") continue;
+      var cuid = cu.uid || cu.userId || cu.id;
+      if (cuid && String(cuid) !== myUidStr && String(cuid) !== "0") return cu;
+    }
+
+    return null;
+  }
+
+  async function hydratePeerFromRoute() {
+    if (state.peerHydrating) return false;
+    if (state.peerUidCache && state.peerUsernameCache) return true;
+
+    var u = getPeerFromAjaxify();
+    if (setPeerFromUser(u)) return true;
+
+    var slug = getRoutePeerSlug();
+    if (!slug) return false;
+
+    state.peerUserslugCache = state.peerUserslugCache || slug;
+    state.peerUsernameCache = state.peerUsernameCache || slug;
+    updateHeaderPeerInfo(null);
+
+    state.peerHydrating = true;
+    try {
+      var url = getRelativePath() + "/api/user/" + encodeURIComponent(slug);
+      var res = await fetch(url, { credentials: "same-origin", headers: { accept: "application/json" } });
+      if (!res.ok) return false;
+
+      var json = await res.json();
+      var record = pickUserRecord(json) || json;
+      if (json && json.userData) record = json.userData;
+      if (json && json.users && json.users[0]) record = json.users[0];
+
+      if (setPeerFromUser(record)) {
+        updateHeaderPeerInfo(null);
+        return true;
+      }
+    } catch (e) {
+      warn("hydrate-peer", e);
+    } finally {
+      state.peerHydrating = false;
+    }
+
+    return false;
+  }
+
   function getPeerUid() {
     if (state.peerUidCache) return state.peerUidCache;
 
-    var myUidStr = String(window.app && app.user ? app.user.uid : state.myUid);
-
-    if (window.ajaxify && ajaxify.data && ajaxify.data.users && ajaxify.data.users.length) {
-      for (var i = 0; i < ajaxify.data.users.length; i++) {
-        var u = ajaxify.data.users[i];
-
-        if (String(u.uid) !== myUidStr && String(u.uid) !== "0") {
-          state.peerUidCache = String(u.uid);
-          state.peerUsernameCache = u.username || "";
-          return state.peerUidCache;
-        }
-      }
-    }
+    setPeerFromUser(getPeerFromAjaxify());
+    if (state.peerUidCache) return state.peerUidCache;
 
     var peerMsg = state.messages.find(function (m) {
       return !m.mine && m.uid;
@@ -749,7 +869,17 @@
 
     if (peerMsg && peerMsg.uid) {
       state.peerUidCache = String(peerMsg.uid);
+      state.peerUsernameCache = state.peerUsernameCache || peerMsg.username || "";
+      state.peerUserslugCache = state.peerUserslugCache || peerMsg.userslug || "";
       return state.peerUidCache;
+    }
+
+    if (!state.peerUsernameCache) {
+      var slug = getRoutePeerSlug();
+      if (slug) {
+        state.peerUsernameCache = slug;
+        state.peerUserslugCache = slug;
+      }
     }
 
     return "";
@@ -764,10 +894,22 @@
       pic = app.user.picture;
       if (app.user.icontext) text = app.user.icontext;
       if (app.user.iconbgColor) bg = app.user.iconbgColor;
-    } else if (window.ajaxify && ajaxify.data && ajaxify.data.users) {
-      var u = ajaxify.data.users.find(function (x) {
-        return String(x.uid) === String(uid);
-      });
+    } else {
+      var u = null;
+
+      if (uid && window.ajaxify && ajaxify.data && ajaxify.data.users) {
+        u = ajaxify.data.users.find(function (x) {
+          return String(x.uid) === String(uid);
+        });
+      }
+
+      if (!u && state.peerUsernameCache && String(username || "") === String(state.peerUsernameCache)) {
+        u = {
+          picture: state.peerPictureCache,
+          icontext: state.peerIconTextCache,
+          iconbgColor: state.peerIconBgCache
+        };
+      }
 
       if (u) {
         pic = u.picture;
@@ -796,47 +938,44 @@
     if (!pInfo) return;
 
     var avatar = byId("cp-peer-avatar");
-    var name = state.peerUsernameCache;
-    var userslug = "";
-    var uid = "";
+    var ajaxUser = getPeerFromAjaxify();
+    var name = state.peerUsernameCache || "";
+    var userslug = state.peerUserslugCache || "";
+    var uid = state.peerUidCache || "";
     var avatarHtml = "";
 
     if (peerMsg) {
-      name = peerMsg.username;
-      userslug = peerMsg.userslug;
-      uid = peerMsg.uid || "";
+      name = peerMsg.username || name;
+      userslug = peerMsg.userslug || userslug;
+      uid = peerMsg.uid || uid;
       avatarHtml = peerMsg.avatarHtml || "";
+      setPeerFromUser({ uid: uid, username: name, userslug: userslug });
     }
 
-    if ((!name || !uid) && window.ajaxify && ajaxify.data && ajaxify.data.users) {
-      var u = ajaxify.data.users.find(function (x) {
-        return String(x.uid) !== String(window.app && app.user ? app.user.uid : state.myUid) && String(x.uid) !== "0";
-      });
-
-      if (u) {
-        name = name || u.username;
-        userslug = userslug || u.userslug;
-        uid = uid || String(u.uid);
-        avatarHtml = avatarHtml || getAvatarHtml(String(u.uid), u.username, null);
-      }
+    if (ajaxUser) {
+      setPeerFromUser(ajaxUser);
+      name = name || ajaxUser.username || ajaxUser.displayname || ajaxUser.name || ajaxUser.userslug || ajaxUser.slug || "";
+      userslug = userslug || ajaxUser.userslug || ajaxUser.slug || "";
+      uid = uid || ajaxUser.uid || ajaxUser.userId || ajaxUser.id || "";
+      avatarHtml = avatarHtml || getAvatarHtml(String(uid || ""), name, null);
     }
 
     if (!name) {
-      var match = location.pathname.match(/\/user\/([^/]+)\/chats/);
-
-      if (match) {
-        name = decodeURIComponent(match[1]);
-        userslug = name;
+      var routeSlug = getRoutePeerSlug();
+      if (routeSlug) {
+        name = routeSlug;
+        userslug = userslug || routeSlug;
       }
     }
 
     if (name) {
       state.peerUsernameCache = name;
       userslug = userslug || encodeURIComponent(String(name).toLowerCase().replace(/ /g, "-"));
-      pInfo.innerHTML = '<a href="/user/' + escAttr(userslug) + '/topics" title="访问主页">' + esc(name) + "</a>";
+      state.peerUserslugCache = userslug;
+      pInfo.innerHTML = '<a href="' + getRelativePath() + '/user/' + escAttr(userslug) + '/topics" title="访问主页">' + esc(name) + "</a>";
       if (avatar) avatar.innerHTML = avatarHtml || getAvatarHtml(String(uid || getPeerUid() || ""), name, null);
     } else {
-      pInfo.textContent = "聊天室";
+      pInfo.textContent = cpT("chatRoom", "聊天室");
       if (avatar) avatar.innerHTML = getAvatarHtml("", "?", null);
     }
   }
@@ -1429,6 +1568,13 @@
 
   async function ensurePeerLoaded() {
     var pUid = getPeerUid();
+
+    if (!pUid) {
+      await hydratePeerFromRoute();
+      pUid = getPeerUid();
+      updateHeaderPeerInfo(null);
+    }
+
     if (!pUid || state.loadedPeerUid === pUid) return;
 
     state.loadedPeerUid = pUid;
@@ -1501,6 +1647,12 @@
 
     injectStyle();
     injectRoot();
+    // 先用路由用户名占位，避免标题长时间停留在“加载中...”
+    updateHeaderPeerInfo(null);
+    hydratePeerFromRoute().then(function () {
+      updateHeaderPeerInfo(null);
+      ensurePeerLoaded();
+    });
     bindUI();
     bindSelectBlockers();
     applyBackground();
@@ -6356,8 +6508,3 @@
     window.addEventListener("load", boot);
   }
 })();
-
-
-
-
-
