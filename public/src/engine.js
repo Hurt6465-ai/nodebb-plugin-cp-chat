@@ -19,7 +19,7 @@
   if (cpPluginConfig().enabled === false) return;
 
   if (window.__cpNodebbHarmonyInited) return;
-  window.__cpNodebbHarmonyVersion = "1.0.1-peer-fix";
+  window.__cpNodebbHarmonyVersion = "1.0.2-null-guard-peer-title";
   window.__cpNodebbHarmonyInited = true;
 
   var LS_PREFIX = "cp_chat_harmony_" + location.pathname.replace(/[^\w]/g, "_");
@@ -118,7 +118,7 @@
     '1. 做情感分析。50字以内，格式严格写为："[情绪状态]，[表面意思]，[可能潜台词]。" 若消息太短无法判断，写"消息很短，正常接即可。"\n' +
     '2. 生成3-5条短回复。每条必须能直接发送，10字以内，口语化，有接话钩子。\n\n' +
     '【回复生成规则】\n' +
-    '- 每条 text 必须 ≤12 个中文字符，越短越好。\n' +
+    '- 每条 text 必须 ≤10 个中文字符，越短越好。\n' +
     '- 可以用"哈哈哈、真的、笑死、好家伙、绝了、天呐"等自然聊天词。\n' +
     '- 风格多样，至少覆盖轻松幽默/温暖关心/真诚走心/推进关系/化解尴尬中的不同方向。\n' +
     '- 每条附带口语化风险说明，例如"很安全，她会回"或"有点冒险"。\n' +
@@ -757,7 +757,7 @@
     if (obj.recipient && typeof obj.recipient === "object") return obj.recipient;
     if (obj.toUser && typeof obj.toUser === "object") return obj.toUser;
     if (obj.profile && typeof obj.profile === "object") return obj.profile;
-    if (obj.uid || obj.username || obj.userslug || obj.slug) return obj;
+    if (obj.uid || obj.username || obj.userslug || obj.slug || obj.title || obj.displayname || obj.name) return obj;
 
     return null;
   }
@@ -767,7 +767,7 @@
 
     var myUidStr = String(window.app && app.user ? app.user.uid : state.myUid);
     var uid = u.uid || u.userId || u.id;
-    var username = u.username || u.displayname || u.name || u.userslug || u.slug || "";
+    var username = u.username || u.displayname || u.name || u.title || u.fullname || u.userslug || u.slug || "";
     var userslug = u.userslug || u.slug || (username ? encodeURIComponent(String(username).toLowerCase().replace(/ /g, "-")) : "");
 
     if (uid && String(uid) !== myUidStr && String(uid) !== "0") state.peerUidCache = String(uid);
@@ -787,6 +787,9 @@
     var myUidStr = String(window.app && app.user ? app.user.uid : state.myUid);
     var routeSlug = getRoutePeerSlug();
     var candidates = [];
+
+    var directRecord = pickUserRecord(data);
+    if (directRecord) candidates.push(directRecord);
 
     if (Array.isArray(data.users)) candidates = candidates.concat(data.users);
     if (Array.isArray(data.members)) candidates = candidates.concat(data.members);
@@ -954,7 +957,7 @@
 
     if (ajaxUser) {
       setPeerFromUser(ajaxUser);
-      name = name || ajaxUser.username || ajaxUser.displayname || ajaxUser.name || ajaxUser.userslug || ajaxUser.slug || "";
+      name = name || ajaxUser.username || ajaxUser.displayname || ajaxUser.name || ajaxUser.title || ajaxUser.fullname || ajaxUser.userslug || ajaxUser.slug || "";
       userslug = userslug || ajaxUser.userslug || ajaxUser.slug || "";
       uid = uid || ajaxUser.uid || ajaxUser.userId || ajaxUser.id || "";
       avatarHtml = avatarHtml || getAvatarHtml(String(uid || ""), name, null);
@@ -1620,6 +1623,11 @@
 
     state.peerUidCache = "";
     state.peerUsernameCache = "";
+    state.peerUserslugCache = "";
+    state.peerPictureCache = "";
+    state.peerIconTextCache = "";
+    state.peerIconBgCache = "";
+    state.peerHydrating = false;
     state.suppressNativeIds = {};
     state.pendingSentTexts = {};
     state.loadedPeerUid = "";
@@ -1746,6 +1754,11 @@
     state.messages = [];
     state.peerUidCache = "";
     state.peerUsernameCache = "";
+    state.peerUserslugCache = "";
+    state.peerPictureCache = "";
+    state.peerIconTextCache = "";
+    state.peerIconBgCache = "";
+    state.peerHydrating = false;
     state.suppressNativeIds = {};
     state.pendingSentTexts = {};
     state.loadedPeerUid = "";
@@ -3140,7 +3153,15 @@
   }
 
   function injectRoot() {
-    if (byId("cp-chat-root")) return;
+    var existingRoot = byId("cp-chat-root");
+    if (existingRoot) {
+      if (byId("cp-peer-info") && byId("cp-bg-op-val") && byId("cp-settings-mask") && byId("cp-msg-list")) return;
+      try {
+        existingRoot.remove();
+      } catch (_) {
+        if (existingRoot.parentNode) existingRoot.parentNode.removeChild(existingRoot);
+      }
+    }
 
     var html = `
       <div id="cp-chat-root">
@@ -3530,7 +3551,8 @@
     byId("cp-bg-file").addEventListener("change", handleBackgroundUpload);
 
     byId("cp-bg-opacity").addEventListener("input", function (e) {
-      byId("cp-bg-op-val").innerText = Math.round(e.target.value * 100) + "%";
+      var bgOpVal = byId("cp-bg-op-val");
+      if (bgOpVal) bgOpVal.innerText = Math.round(e.target.value * 100) + "%";
       state.bg.opacity = parseFloat(e.target.value);
       applyBackground();
     });
@@ -3854,6 +3876,16 @@
   function syncSettingsUI() {
     state.cfg = normalizeConfig(state.cfg);
 
+    function setValue(id, value) {
+      var el = byId(id);
+      if (el) el.value = value;
+    }
+
+    function setChecked(id, value) {
+      var el = byId(id);
+      if (el) el.checked = !!value;
+    }
+
     var endpoint = byId("cp-ai-endpoint");
     var key = byId("cp-ai-key");
     var model = byId("cp-ai-model");
@@ -3862,18 +3894,19 @@
     if (key) key.value = state.cfg.ai.apiKey || "";
     if (model) model.value = state.cfg.ai.model || "gpt-4o-mini";
 
-    byId("cp-sr-setting").checked = !!state.cfg.smartReplyEnabled;
-    byId("cp-auto-trans-setting").checked = !!state.cfg.autoTranslateLastMsg;
-    byId("cp-context-memory-setting").checked = !!state.cfg.contextMemoryEnabled;
-    byId("cp-context-rounds-setting").value = String(state.cfg.contextRounds || 30);
-    byId("cp-target-gender").value = state.cfg.targetGender || "女生";
-    byId("cp-relationship-stage").value = state.cfg.relationshipStage || "刚认识";
-    byId("cp-communication-style").value = state.cfg.communicationStyle || "自然直接，偶尔幽默";
+    setChecked("cp-sr-setting", state.cfg.smartReplyEnabled);
+    setChecked("cp-auto-trans-setting", state.cfg.autoTranslateLastMsg);
+    setChecked("cp-context-memory-setting", state.cfg.contextMemoryEnabled);
+    setValue("cp-context-rounds-setting", String(state.cfg.contextRounds || 30));
+    setValue("cp-target-gender", state.cfg.targetGender || "女生");
+    setValue("cp-relationship-stage", state.cfg.relationshipStage || "刚认识");
+    setValue("cp-communication-style", state.cfg.communicationStyle || "自然直接，偶尔幽默");
 
     var op = state.bg.opacity !== undefined ? state.bg.opacity : 0.85;
+    setValue("cp-bg-opacity", op);
 
-    byId("cp-bg-opacity").value = op;
-    byId("cp-bg-op-val").innerText = Math.round(op * 100) + "%";
+    var bgOpVal = byId("cp-bg-op-val");
+    if (bgOpVal) bgOpVal.innerText = Math.round(op * 100) + "%";
 
     syncProviderUI();
     syncTranslateBar();
