@@ -1,18 +1,47 @@
 {
   "name": "nodebb-plugin-cp-chat-harmony",
-  "version": "1.0.0",
-  "description": "Harmony mobile chat overlay with translation, media, voice, smart replies and Wukong bridge compatibility.",
+  "version": "1.0.1",
+  "description": "High-performance Harmony chat overlay for NodeBB 4.10 with translation, media compression, voice messages, smart replies, and i18n.",
   "main": "library.js",
-  "license": "MIT",
   "keywords": [
     "nodebb",
     "nodebb-plugin",
     "chat",
     "harmony",
-    "wukongim"
+    "translation",
+    "i18n"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hurt6465-ai/nodebb-plugin-cp-chat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hurt6465-ai/nodebb-plugin-cp-chat/issues"
+  },
+  "homepage": "https://github.com/Hurt6465-ai/nodebb-plugin-cp-chat#readme",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "nodebb": ">=4.10.0 <5"
+  },
   "nbbpm": {
     "compatibility": ">=4.10.0 <5"
   },
-  "dependencies": {}
+  "scripts": {
+    "lint": "node --check library.js && node --check lib/controllers.js && node --check lib/settings.js && node --check public/src/client.js && node --check public/src/i18n.js && node --check public/src/engine.js && node --check public/src/admin.js",
+    "pack:zip": "node scripts/zip.js"
+  },
+  "files": [
+    "library.js",
+    "plugin.json",
+    "lib",
+    "public",
+    "scss",
+    "templates",
+    "languages",
+    "README.md",
+    "LICENSE"
+  ]
 }
