@@ -43,4 +43,3 @@
 
   root.i18n = Object.assign({}, en, dicts[code] || dicts[short] || en);
 }());
-
