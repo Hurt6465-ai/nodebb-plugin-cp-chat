@@ -78,3 +78,10 @@ languages/*/cp-chat-harmony.json
 - 这个包不内置 WukongIM 服务端；如果你已有 `/bridge` 服务，可以在 ACP 里配置 `Bridge 基础 URL` 让插件代理。
 - 如果只使用 NodeBB 原生聊天，Bridge 留空即可，插件仍会用原生输入框发送文本/媒体。
 - 上线前建议把 WukongIM SDK 自托管，避免外部 CDN 不稳定。
+
+
+## 1.0.3
+
+- 修复 NodeBB 4.10 Harmony 用户聊天页标题长时间显示“加载中...”的问题。
+- 增加从 `/user/:userslug/chats` 路由、`ajaxify.data` 和 `/api/user/:userslug` 自动识别对方用户。
+- 即使 Wukong Bridge 尚未返回 UID，也会先显示用户名和头像占位，避免空白标题。
