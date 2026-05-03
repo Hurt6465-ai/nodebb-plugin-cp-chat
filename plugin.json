@@ -2,7 +2,7 @@
   "id": "nodebb-plugin-cp-chat-harmony",
   "name": "CP Chat Harmony",
   "description": "Harmony mobile chat overlay with translation, voice, media compression, smart replies, Wukong bridge compatibility and multilingual UI.",
-  "url": "https://github.com/yourname/nodebb-plugin-cp-chat-harmony",
+  "url": "https://github.com/Hurt6465-ai/nodebb-plugin-cp-chat",
   "library": "./library.js",
   "hooks": [
     {
