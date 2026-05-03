@@ -1,0 +1,18 @@
+{
+  "name": "nodebb-plugin-cp-chat-harmony",
+  "version": "1.0.0",
+  "description": "Harmony mobile chat overlay with translation, media, voice, smart replies and Wukong bridge compatibility.",
+  "main": "library.js",
+  "license": "MIT",
+  "keywords": [
+    "nodebb",
+    "nodebb-plugin",
+    "chat",
+    "harmony",
+    "wukongim"
+  ],
+  "nbbpm": {
+    "compatibility": ">=4.10.0 <5"
+  },
+  "dependencies": {}
+}
