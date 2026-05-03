@@ -2,6 +2,7 @@
 
 (function () {
   const PLUGIN_ID = 'nodebb-plugin-cp-chat-harmony';
+  const CP_ENGINE_VERSION = '1.0.3-cache-peer-fastboot';
   const root = window.CPChatHarmony = window.CPChatHarmony || {};
 
   let configPromise = null;
@@ -85,18 +86,44 @@
     return path.indexOf(pattern) !== -1 || !!document.querySelector('[component="chat/messages"]');
   }
 
+  function injectEarlyStyle() {
+    if (document.getElementById('cp-chat-harmony-early-style')) {
+      return;
+    }
+    const st = document.createElement('style');
+    st.id = 'cp-chat-harmony-early-style';
+    st.textContent = '.cp-chat-harmony-booting [component="chat/messages"], .cp-chat-harmony-booting [component="chat/input"], .cp-chat-harmony-booting [component="chat/send"], .cp-chat-harmony-booting .chat-composer, .cp-chat-harmony-booting .chats-full, .cp-chat-harmony-booting .chat-modal { opacity:0!important; pointer-events:none!important; }';
+    document.head.appendChild(st);
+  }
+
+  function markBooting() {
+    injectEarlyStyle();
+    const target = document.body || document.documentElement;
+    if (target) {
+      target.classList.add('cp-chat-harmony-booting');
+    }
+    window.setTimeout(function () {
+      const t = document.body || document.documentElement;
+      if (t && !document.getElementById('cp-chat-root')) {
+        t.classList.remove('cp-chat-harmony-booting');
+      }
+    }, 6000);
+  }
+
   async function maybeLoadEngine() {
     const cfg = await loadConfig();
     if (!cfg.enabled || !isChatPage(cfg)) {
       return;
     }
+    markBooting();
+    root.expectedEngineVersion = CP_ENGINE_VERSION;
     if (enginePromise) {
       return enginePromise;
     }
     const base = getAssetBase();
-    enginePromise = loadScriptOnce(`${base}/src/i18n.js`, 'i18nScript')
+    enginePromise = loadScriptOnce(`${base}/src/i18n.js?v=${encodeURIComponent(CP_ENGINE_VERSION)}`, 'i18nScript')
       .then(function () {
-        return loadScriptOnce(`${base}/src/engine.js`, 'engineScript');
+        return loadScriptOnce(`${base}/src/engine.js?v=${encodeURIComponent(CP_ENGINE_VERSION)}`, 'engineScript');
       })
       .then(function () {
         debug('engine loaded');
