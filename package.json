@@ -1,6 +1,6 @@
 {
   "name": "nodebb-plugin-cp-chat-harmony",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "High-performance Harmony chat overlay for NodeBB 4.10 with translation, media compression, voice messages, smart replies, and i18n.",
   "main": "library.js",
   "keywords": [
