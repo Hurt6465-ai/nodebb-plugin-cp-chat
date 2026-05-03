@@ -19,7 +19,7 @@
   if (cpPluginConfig().enabled === false) return;
 
   if (window.__cpNodebbHarmonyInited) return;
-  window.__cpNodebbHarmonyVersion = "1.0.2-null-guard-peer-title";
+  window.__cpNodebbHarmonyVersion = "1.0.3-cache-peer-fastboot";
   window.__cpNodebbHarmonyInited = true;
 
   var LS_PREFIX = "cp_chat_harmony_" + location.pathname.replace(/[^\w]/g, "_");
@@ -3400,6 +3400,7 @@
     `;
 
     document.body.insertAdjacentHTML("beforeend", html);
+    try { document.body.classList.remove("cp-chat-harmony-booting"); } catch (_) {}
     applyStaticTranslations();
 
     byId("cp-media-btn").innerHTML = ICON.photo;
@@ -3930,21 +3931,30 @@
   }
 
   function saveSettings() {
-    state.cfg.smartReplyEnabled = byId("cp-sr-setting").checked;
-    state.cfg.autoTranslateLastMsg = byId("cp-auto-trans-setting").checked;
-    state.cfg.contextMemoryEnabled = byId("cp-context-memory-setting").checked;
-    state.cfg.contextRounds = Number(byId("cp-context-rounds-setting").value) || 30;
-    state.cfg.targetGender = byId("cp-target-gender").value || "女生";
-    state.cfg.relationshipStage = byId("cp-relationship-stage").value || "刚认识";
-    state.cfg.communicationStyle = byId("cp-communication-style").value.trim() || "自然直接，偶尔幽默";
+    function checked(id, fallback) {
+      var el = byId(id);
+      return el ? !!el.checked : !!fallback;
+    }
+    function value(id, fallback) {
+      var el = byId(id);
+      return el && el.value != null ? String(el.value) : String(fallback || "");
+    }
+
+    state.cfg.smartReplyEnabled = checked("cp-sr-setting", state.cfg.smartReplyEnabled);
+    state.cfg.autoTranslateLastMsg = checked("cp-auto-trans-setting", state.cfg.autoTranslateLastMsg);
+    state.cfg.contextMemoryEnabled = checked("cp-context-memory-setting", state.cfg.contextMemoryEnabled);
+    state.cfg.contextRounds = Number(value("cp-context-rounds-setting", state.cfg.contextRounds || 30)) || 30;
+    state.cfg.targetGender = value("cp-target-gender", state.cfg.targetGender || "女生") || "女生";
+    state.cfg.relationshipStage = value("cp-relationship-stage", state.cfg.relationshipStage || "刚认识") || "刚认识";
+    state.cfg.communicationStyle = value("cp-communication-style", state.cfg.communicationStyle || "自然直接，偶尔幽默").trim() || "自然直接，偶尔幽默";
 
     state.cfg.translateProvider = getProvider();
-    state.cfg.ai.endpoint = byId("cp-ai-endpoint").value.trim();
-    state.cfg.ai.apiKey = byId("cp-ai-key").value.trim();
-    state.cfg.ai.model = byId("cp-ai-model").value.trim() || "gpt-4o-mini";
+    state.cfg.ai.endpoint = value("cp-ai-endpoint", state.cfg.ai.endpoint || "").trim();
+    state.cfg.ai.apiKey = value("cp-ai-key", state.cfg.ai.apiKey || "").trim();
+    state.cfg.ai.model = value("cp-ai-model", state.cfg.ai.model || "gpt-4o-mini").trim() || "gpt-4o-mini";
     state.cfg.ai.temperature = 0.2;
 
-    state.bg.opacity = parseFloat(byId("cp-bg-opacity").value);
+    state.bg.opacity = parseFloat(value("cp-bg-opacity", state.bg.opacity !== undefined ? state.bg.opacity : 0.85));
 
     saveJSON(KEY_CFG, state.cfg);
     saveJSON(KEY_BG, state.bg);
