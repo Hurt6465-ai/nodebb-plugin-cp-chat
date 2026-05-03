@@ -115,10 +115,10 @@
     '【对方刚发的消息】\n' +
     '"{{peerMessage}}"\n\n' +
     '【你需要完成的任务】\n' +
-    '1. 做情感分析。50字以内，格式严格写为："[情绪状态]，[表面意思]，[可能潜台词]。" 若消息太短无法判断，写"消息很短，正常接即可。"\n' +
-    '2. 生成3-5条短回复。每条必须能直接发送，10字以内，口语化，有接话钩子。\n\n' +
+    '1. 根据聊天上下文信息，分析对方的意图和情绪。50字以内，格式严格写为："[情绪状态]，[表面意思]，[可能潜台词]。" 若消息太短无法判断，写"消息很短，正常接即可。"\n' +
+    '2. 根据情感分析结果为用户生成3-5条短回复。每条必须能直接发送，20字以内，口语化，有接话钩子。\n\n' +
     '【回复生成规则】\n' +
-    '- 每条 text 必须 ≤10 个中文字符，越短越好。\n' +
+    '- 每条 text 必须 ≤20 个字符，越短越好。\n' +
     '- 可以用"哈哈哈、真的、笑死、好家伙、绝了、天呐"等自然聊天词。\n' +
     '- 风格多样，至少覆盖轻松幽默/温暖关心/真诚走心/推进关系/化解尴尬中的不同方向。\n' +
     '- 每条附带口语化风险说明，例如"很安全，她会回"或"有点冒险"。\n' +
@@ -131,7 +131,7 @@
     '  "quick_replies": [\n' +
     '    {\n' +
     '      "label": "6字内标签",\n' +
-    '      "text": "10字内短回复",\n' +
+    '      "text": "20字内短回复",\n' +
     '      "style": "轻松幽默/温暖关心/真诚走心/推进关系/化解尴尬",\n' +
     '      "affinity_risk": "风险说明"\n' +
     '    }\n' +
@@ -2079,7 +2079,7 @@
         line-height:1.45;
         word-break:break-word;
         cursor:default;
-        border-radius:18px 19px 13px 18px;
+        border-radius:15px 15px 13px 15px;
         z-index:1!important;
       }
 
@@ -2642,17 +2642,25 @@
         flex-shrink:0;
         background:#e0e7ff;
         color:#4338ca;
-        padding:6px 12px;
+        padding:7px 12px;
         border-radius:16px;
         font-size:13px;
         font-weight:600;
         cursor:pointer;
         border:1px solid rgba(0,0,0,.05);
-        white-space:nowrap;
+        white-space:normal;
+        line-height:1.35;
         box-shadow:0 2px 4px rgba(0,0,0,.05);
-        max-width:140px;
+        max-width:min(72vw,260px);
+        overflow:visible;
+        text-overflow:clip;
+      }
+
+      .cp-sr-pill {
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        -webkit-box-orient:vertical;
         overflow:hidden;
-        text-overflow:ellipsis;
       }
 
       .cp-sr-pill:active { background:#c7d2fe; }
@@ -5527,7 +5535,7 @@
       [
         {
           role: "system",
-          content: "只输出可解析的 JSON，不要使用 Markdown，不要解释。所有 quick_replies.text 必须 10 字以内。"
+          content: "只输出可解析的 JSON，不要使用 Markdown，不要解释。所有 quick_replies.text 必须 20 字以内。"
         },
         {
           role: "user",
