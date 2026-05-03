@@ -1,0 +1,9 @@
+/* CP Chat Harmony: loader-level styles. The runtime engine injects the large mobile shell CSS only on chat pages. */
+.cp-chat-harmony-engine-loading {
+  pointer-events: none;
+}
+
+body.cp-shell-on {
+  overscroll-behavior: none;
+}
+
