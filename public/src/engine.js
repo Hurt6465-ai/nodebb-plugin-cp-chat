@@ -41,6 +41,18 @@
   // 统一滚动判定阈值
   var BOTTOM_THRESHOLD = 120;
 
+
+  var CALL_SIGNAL_PREFIX = "__cp_harmony_call__:";
+
+  function isCallSignalText(text) {
+    return String(text == null ? "" : text).indexOf(CALL_SIGNAL_PREFIX) === 0;
+  }
+
+  function isCallSignalMessage(m) {
+    if (!m) return false;
+    return isCallSignalText(m.serverText || m.text || m.html || "");
+  }
+
   var LANG_LIST = [
     { n: "中文", f: "🇨🇳" },
     { n: "English", f: "🇺🇸" },
@@ -599,7 +611,9 @@
     try {
       db.transaction("chats", "readwrite").objectStore("chats").put({
         peerUid: peerUid,
-        messages: state.wkMessages.slice(-MAX_PERSIST_MESSAGES),
+        messages: state.wkMessages.filter(function (m) {
+          return !isCallSignalMessage(m);
+        }).slice(-MAX_PERSIST_MESSAGES),
         maxSeq: maxSeq,
         ts: Date.now()
       });
@@ -612,7 +626,11 @@
     var data = await idbGet("chats", peerUid);
     if (!data || !data.messages) return;
 
-    state.wkMessages = data.messages.slice(-MAX_PERSIST_MESSAGES);
+    state.wkMessages = data.messages
+      .filter(function (m) {
+        return !isCallSignalMessage(m);
+      })
+      .slice(-MAX_PERSIST_MESSAGES);
 
     for (var i = 0; i < state.wkMessages.length; i++) {
       if (!state.wkMessages[i]._ver) state.wkMessages[i]._ver = 1;
@@ -681,7 +699,9 @@
   function getMergedMessages() {
     if (!state.mergedDirty && state.mergedCache) return state.mergedCache;
 
-    var allRawMsgs = state.messages.concat(state.wkMessages || []);
+    var allRawMsgs = state.messages.concat(state.wkMessages || []).filter(function (m) {
+      return !isCallSignalMessage(m);
+    });
 
     allRawMsgs.sort(function (a, b) {
       return (a.ts || 0) - (b.ts || 0);
@@ -1203,6 +1223,9 @@
           var t = payloadObj.text || payloadObj.content || "";
           if (!t) return;
 
+          // 通话信令只用于通话控制，不显示为普通聊天气泡
+          if (isCallSignalText(t)) return;
+
           var newMsg = createMessageObj(t, false, fromUid, m, payloadObj);
           // 修复：标记接收到的服务器文本
           newMsg.serverText = t;
@@ -1362,10 +1385,17 @@
       var fromUid = String(m.from_uid || m.fromUID);
       var isMine = fromUid === state.myUid;
       var serverT = payloadObj.text || payloadObj.content || "";
+
+      // 历史/离线消息里的通话信令不显示
+      if (isCallSignalText(serverT)) continue;
+
       var t = serverT;
 
       if (isMine && payloadObj.originalText) t = payloadObj.originalText;
       if (!t) continue;
+
+      // 双保险：originalText 如果也是通话信令，也跳过
+      if (isCallSignalText(t)) continue;
 
       var msgId = String(m.message_id || m.messageID || m.client_msg_no || m.clientMsgNo || "wk_hist_" + Math.random());
 
@@ -1434,6 +1464,12 @@
   }
 
   function sendText(text, originalText) {
+    // 防止误把通话信令当普通消息发送并插入本地气泡
+    if (isCallSignalText(text) || isCallSignalText(originalText)) {
+      sendCallSignalText(text || originalText);
+      return;
+    }
+
     var peerUid = getPeerUid();
 
     try {
@@ -4396,6 +4432,13 @@
     });
 
     var plainText = getMessagePlainText(clone).trim();
+
+    // NodeBB 原生消息里如果出现通话信令，也不要同步进自定义聊天窗口
+    if (isCallSignalText(plainText)) {
+      if (id) state.suppressNativeIds[String(id)] = true;
+      return null;
+    }
+
     var htmlText = getRenderableHtml(clone);
 
     if (mine && shouldSuppressNativeText(plainText, id)) {
@@ -5710,6 +5753,33 @@
     } finally {
       btn.disabled = false;
       updatePrimaryButton();
+    }
+  }
+
+
+
+  function sendCallSignalText(signalText) {
+    var peerUid = getPeerUid();
+
+    if (!signalText) return false;
+
+    if (!peerUid || !state.wkReady || !window.wk) {
+      warn("wk-call-signal-not-ready", {
+        peerUid: peerUid,
+        wkReady: state.wkReady,
+        hasWk: !!window.wk
+      });
+      return false;
+    }
+
+    try {
+      var channel = new window.wk.Channel(peerUid, 1);
+      var msgContent = new window.wk.MessageText(signalText);
+      window.wk.WKSDK.shared().chatManager.send(msgContent, channel);
+      return true;
+    } catch (e) {
+      warn("wk-call-signal-send", e);
+      return false;
     }
   }
 
