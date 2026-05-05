@@ -1,6 +1,6 @@
 # NodeBB Plugin: CP Chat Harmony
 
-适配目标：NodeBB `4.10.x` + Harmony 主题聊天页。
+适配目标：NodeBB 悟空im聊天窗口。
 
 这个插件把上传的聊天窗口脚本封装成标准 NodeBB 插件，包含：
 
